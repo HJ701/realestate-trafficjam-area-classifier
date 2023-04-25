@@ -1,6 +1,7 @@
 import argparse
 import pandas as pd
 import joblib
+import pathlib
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score, accuracy_score
 from sklearn.linear_model import LogisticRegression
@@ -15,10 +16,8 @@ def main():
 
     df = pd.read_csv(args.in_csv)
     df = build_feats(df)
-
     y = df["jam_label"].astype(int)
     X = df.drop(columns=["jam_label", "area"])
-
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
 
     models = {
@@ -26,19 +25,18 @@ def main():
         "rf": RandomForestClassifier(n_estimators=200, random_state=42),
     }
 
-    out_rows = []
-    import pathlib
     pathlib.Path(args.out_dir).mkdir(parents=True, exist_ok=True)
-
+    out_rows = []
     for name, m in models.items():
         m.fit(X_train, y_train)
-        prob = m.predict_proba(X_test)[:, 1] if hasattr(m, "predict_proba") else m.predict(X_test)
+        prob = m.predict_proba(X_test)[:, 1]
         pred = (prob >= 0.5).astype(int)
-        auc = roc_auc_score(y_test, prob) if len(set(y_test)) > 1 else 0.0
+        auc = roc_auc_score(y_test, prob)
         acc = accuracy_score(y_test, pred)
         out_rows.append({"model": name, "auc": float(auc), "acc": float(acc)})
         joblib.dump(m, f"{args.out_dir}/{name}.joblib")
 
+    pathlib.Path("reports/results").mkdir(parents=True, exist_ok=True)
     pd.DataFrame(out_rows).to_csv("reports/results/leaderboard.csv", index=False)
 
 if __name__ == "__main__":
